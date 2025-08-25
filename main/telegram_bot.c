@@ -191,6 +191,36 @@ void send_telegram_message(void) {
     esp_http_client_cleanup(client);
     //ESP_LOGI(TAG, "esp_get_free_heap_size: %lld", esp_get_free_heap_size());
 }
+esp_err_t telegram_delete_webhook(const char *bot_token) {
+    char url[256];
+    snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/deleteWebhook", bot_token);
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .cert_pem = telegram_certificate_pem_start,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_set_method(client, HTTP_METHOD_GET);
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ESP_LOGE("TELEGRAM", "Failed to delete webhook: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return err;
+    }
+
+    char buffer[512];
+    int content_len = esp_http_client_read_response(client, buffer, sizeof(buffer)-1);
+    if (content_len > 0) {
+        buffer[content_len] = '\0';
+        ESP_LOGI("TELEGRAM", "deleteWebhook response: %s", buffer);
+    }
+
+    esp_http_client_cleanup(client);
+    return ESP_OK;
+}
 char* telegram_get_last_message_text(void) {
     static char message_text[256] = {0};  // buffer
     char buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};
@@ -222,11 +252,8 @@ char* telegram_get_last_message_text(void) {
     ESP_LOGI("TELEGRAM", ">>>>: %s", buffer); 
 
 
-    cJSON *json = cJSON_Parse(buffer);
-    if (!json) {
-        ESP_LOGE("TELEGRAM", "ERRO PARSE JSON");
-        return NULL;
-    }
+cJSON *json = cJSON_Parse(buffer);
+    if (!json) return NULL;
 
     cJSON *result = cJSON_GetObjectItem(json, "result");
     if (!cJSON_IsArray(result) || cJSON_GetArraySize(result) == 0) {
@@ -241,14 +268,32 @@ char* telegram_get_last_message_text(void) {
         return NULL;
     }
 
+    // Парсим текст сообщения
     cJSON *text = cJSON_GetObjectItem(message, "text");
-    if (!cJSON_IsString(text)) {
-        cJSON_Delete(json);
-        return NULL;
+    if (cJSON_IsString(text)) {
+        strncpy(message_text, text->valuestring, sizeof(message_text) - 1);
+        message_text[sizeof(message_text) - 1] = '\0';
     }
 
-    strncpy(message_text, text->valuestring, sizeof(message_text) - 1);
-    message_text[sizeof(message_text) - 1] = '\0';
+    // Дополнительно можно логировать все доступные поля
+    cJSON *chat = cJSON_GetObjectItem(message, "chat");
+    if (cJSON_IsObject(chat)) {
+        cJSON *chat_id = cJSON_GetObjectItem(chat, "id");
+        if (cJSON_IsNumber(chat_id)) ESP_LOGI("TELEGRAM", "chat_id: %lld", (long long)chat_id->valuedouble);
+
+        cJSON *username = cJSON_GetObjectItem(chat, "username");
+        if (cJSON_IsString(username)) ESP_LOGI("TELEGRAM", "username: %s", username->valuestring);
+    }
+
+    cJSON *date = cJSON_GetObjectItem(message, "date");
+    if (cJSON_IsNumber(date)){
+        time_t t = (time_t)date->valueint;        // timestamp
+        struct tm ts;
+        localtime_r(&t, &ts);                     // преобразуем в struct tm
+        char time_str[16];
+        strftime(time_str, sizeof(time_str), "%H:%M:%S", &ts);  // формат ЧЧ:ММ:СС
+        ESP_LOGI("TELEGRAM", "date: %s", time_str);
+    } 
 
     cJSON_Delete(json);
     return message_text;
@@ -268,7 +313,7 @@ void http_test_task(void *pvParameters) {
     ESP_LOGW(TAG, "send_telegram_message");
     send_telegram_message();
 
-    
+    telegram_delete_webhook(TOKEN);
     while (1){
 
         char *msg = telegram_get_last_message_text();

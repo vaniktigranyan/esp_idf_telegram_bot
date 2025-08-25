@@ -18,6 +18,8 @@
 
 #include "wifi_handler.h"
 #include "telegram_bot.h"
+#include "my_configs.h"
+
 
 //Pin connected to a led
 #define LED (GPIO_NUM_13)
