@@ -15,8 +15,8 @@
 #include "esp_http_client.h"
 #include "driver/gpio.h"
 #include "freertos/event_groups.h"
-#include "wifi_handler.h"
-/*WIFI configuration*/
+#include "my_configs.h"
+
 
 #define ESP_MAXIMUM_RETRY  10
 

@@ -17,17 +17,14 @@
 #include "freertos/event_groups.h"
 #include <inttypes.h>
 #include "cJSON.h"
+#include "my_configs.h"
 
 
 /*HTTP buffer*/
 #define MAX_HTTP_RECV_BUFFER 1024
 #define MAX_HTTP_OUTPUT_BUFFER 2048
 
-/*Telegram configuration*/
-#define TOKEN "------------------------------------------------"
 
-#define chat_ID1 "-------------"
-#define chat_ID2 "-------------"
 
 /* TAGs for the system*/
 static const char *TAG = "HTTP_CLIENT Handler";
