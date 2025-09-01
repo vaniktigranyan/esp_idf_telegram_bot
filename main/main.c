@@ -31,8 +31,9 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    //Change it the pin that has a led
+
 	  gpio_reset_pin(LED);
+
 	  gpio_set_direction(LED, GPIO_MODE_OUTPUT);
 	  gpio_set_level(LED, 0);
 
