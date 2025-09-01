@@ -24,6 +24,15 @@
 #define MAX_HTTP_RECV_BUFFER 1024
 #define MAX_HTTP_OUTPUT_BUFFER 2048
 
+#define MAX_COMMANDS 10   // max command 
+
+typedef struct {
+    char command[32];
+    char description[64];
+} telegram_command_t;
+
+static telegram_command_t commands[MAX_COMMANDS];
+static int command_count = 0;
 
 
 /* TAGs for the system*/
@@ -287,16 +296,66 @@ cJSON *json = cJSON_Parse(buffer);
 
     cJSON *date = cJSON_GetObjectItem(message, "date");
     if (cJSON_IsNumber(date)){
-        time_t t = (time_t)date->valueint;        // timestamp
-        struct tm ts;
-        localtime_r(&t, &ts);                     // преобразуем в struct tm
-        char time_str[16];
-        strftime(time_str, sizeof(time_str), "%H:%M:%S", &ts);  // формат ЧЧ:ММ:СС
+        time_t t = (time_t)date->valueint;        // timestamp Telegram
+    struct tm ts;
+    localtime_r(&t, &ts);                     // convert to lockal time
+    char time_str[32];
+    strftime(time_str, sizeof(time_str), "%H:%M:%S %d-%m-%Y", &ts);  
         ESP_LOGI("TELEGRAM", "date: %s", time_str);
     } 
 
     cJSON_Delete(json);
     return message_text;
+}
+void set_command(const char *cmd, const char *desc) {
+    if (command_count < MAX_COMMANDS) {
+        strncpy(commands[command_count].command, cmd, sizeof(commands[command_count].command)-1);
+        strncpy(commands[command_count].description, desc, sizeof(commands[command_count].description)-1);
+        command_count++;
+        ESP_LOGI("TELEGRAM", "Добавлена команда: /%s -> %s", cmd, desc);
+    } else {
+        ESP_LOGW("TELEGRAM", "Лимит команд (%d) достигнут!", MAX_COMMANDS);
+    }
+}
+void telegram_upload_commands(void) {
+    char post_data[1024];
+    strcpy(post_data, "{ \"commands\":[");
+
+    for (int i = 0; i < command_count; i++) {
+        char buf[128];
+        snprintf(buf, sizeof(buf),
+                 "{\"command\":\"%s\",\"description\":\"%s\"}%s",
+                 commands[i].command,
+                 commands[i].description,
+                 (i == command_count - 1) ? "" : ",");
+        strcat(post_data, buf);
+    }
+
+    strcat(post_data, "]}");
+
+    char url[256];
+    snprintf(url, sizeof(url),
+             "https://api.telegram.org/bot%s/setMyCommands", TOKEN);
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .cert_pem = telegram_certificate_pem_start,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+
+    esp_http_client_set_method(client, HTTP_METHOD_POST);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, post_data, strlen(post_data));
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        ESP_LOGI("TELEGRAM", "setMyCommands -> HTTP status %d", esp_http_client_get_status_code(client));
+    } else {
+        ESP_LOGE("TELEGRAM", "HTTP request failed: %s", esp_err_to_name(err));
+    }
+
+    esp_http_client_cleanup(client);
 }
 
 
@@ -314,6 +373,13 @@ void http_test_task(void *pvParameters) {
     send_telegram_message();
 
     telegram_delete_webhook(TOKEN);
+    set_command("start", "start bot");
+    set_command("test", "bot testing");
+    set_command("get", "get info");
+
+    // Отправляем все команды в Telegram
+    telegram_upload_commands();
+
     while (1){
 
         char *msg = telegram_get_last_message_text();
