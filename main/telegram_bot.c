@@ -157,7 +157,7 @@ void check_bot_info(void) {
     esp_http_client_cleanup(client);
 }
 
-void send_telegram_message(void) {
+void sssend_telegram_message(void) {
 
 
 	char url[512] = "";
@@ -200,6 +200,48 @@ void send_telegram_message(void) {
     esp_http_client_cleanup(client);
     //ESP_LOGI(TAG, "esp_get_free_heap_size: %lld", esp_get_free_heap_size());
 }
+void send_telegram_message(const char* chat_id, const char* message_text) {
+    char url[512] = "";
+    char output_buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};
+
+    esp_http_client_config_t config = {
+        .url = "https://api.telegram.org",
+        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .event_handler = _http_event_handler,
+        .cert_pem = telegram_certificate_pem_start,
+        .user_data = output_buffer,
+    };
+
+    ESP_LOGW(TAG, "Starting Telegram POST request");
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    strcat(url, url_string);      // url_string = "https://api.telegram.org/bot<token>"
+    strcat(url, "/sendMessage");
+    esp_http_client_set_url(client, url);
+
+    ESP_LOGW(TAG, "Preparing POST data");
+
+    char post_data[512] = "";
+    sprintf(post_data, "{\"chat_id\":\"%s\",\"text\":\"%s\"}", chat_id, message_text);
+
+    esp_http_client_set_method(client, HTTP_METHOD_POST);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, post_data, strlen(post_data));
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "HTTP POST Status = %d, content_length = %lld",
+                 esp_http_client_get_status_code(client),
+                 esp_http_client_get_content_length(client));
+        ESP_LOGW(TAG, "Response: %s", output_buffer);
+    } else {
+        ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
+    }
+
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+}
+
 esp_err_t telegram_delete_webhook(const char *bot_token) {
     char url[256];
     snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/deleteWebhook", bot_token);
@@ -357,22 +399,24 @@ void telegram_upload_commands(void) {
 
     esp_http_client_cleanup(client);
 }
-
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void http_test_task(void *pvParameters) {
-    
-	strcat(url_string,TOKEN);
+void init_telegram_bot(void){
+    strcat(url_string,TOKEN);
     ESP_LOGW(TAG, "Wait 2 second before start");
     vTaskDelay(2000 / portTICK_PERIOD_MS);
 
     ESP_LOGW(TAG, "check_bot_info");
     check_bot_info();
-    
-    ESP_LOGW(TAG, "send_telegram_message");
-    send_telegram_message();
-
     telegram_delete_webhook(TOKEN);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void http_test_task(void *pvParameters) {
+
+    init_telegram_bot();
+
+    send_telegram_message(chat_ID1, "Hello from ESP32!");
+
+    
     set_command("start", "start bot");
     set_command("test", "bot testing");
     set_command("get", "get info");

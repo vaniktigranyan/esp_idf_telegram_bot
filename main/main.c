@@ -16,7 +16,7 @@
 #include "telegram_bot.h"
 #include "my_configs.h"
 
-
+#define TAG "main"
 void app_main(void){
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -31,10 +31,12 @@ void app_main(void){
 	  gpio_set_direction(LED, GPIO_MODE_OUTPUT);
 	  gpio_set_level(LED, 0);
 
-    connect_to_wifi(WIFI_SSID,WIFI_PASS);
     
-    
-    while (!device_status.connected){vTaskDelay(500 / portTICK_PERIOD_MS);}
+    while (!device_status.connected){
+      connect_to_wifi(WIFI_SSID,WIFI_PASS);
+      vTaskDelay(5000 / portTICK_PERIOD_MS);
+    }
+
     xTaskCreatePinnedToCore(&http_test_task, "http_test_task", 8192*5, NULL, 5, NULL,0);
 
 }
