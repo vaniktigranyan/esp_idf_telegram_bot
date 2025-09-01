@@ -3,11 +3,11 @@
 
 
 /* WI-FI configuration*/
-#define WIFI_SSID      "NAIRI-TECH_RPT"//"---------------------------"
-#define WIFI_PASS      "Ast$&wer#Hk4@"//"---------------------------"
+#define WIFI_SSID      "---------------------------"
+#define WIFI_PASS      "---------------------------"
 
 /*Telegram configuration*/
-#define TOKEN "8177540145:AAGbkafQeWWIO_JayCA_6kyuamVD8GXIAp0"//"---------------------------"
+#define TOKEN "---------------------------"
 
-#define chat_ID1 "1329988285"//"---------------------------"
-#define chat_ID2 "1329988285"//"---------------------------"
+#define chat_ID1 "---------------------------"
+#define chat_ID2 "---------------------------"

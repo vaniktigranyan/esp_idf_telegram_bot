@@ -376,8 +376,6 @@ void http_test_task(void *pvParameters) {
     set_command("start", "start bot");
     set_command("test", "bot testing");
     set_command("get", "get info");
-
-    // Отправляем все команды в Telegram
     telegram_upload_commands();
 
     while (1){
