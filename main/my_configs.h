@@ -1,3 +1,8 @@
+//LED GPIO
+#define LED (2)
+#define MAX_COMMANDS 10   // max command
+
+
 /* WI-FI configuration*/
 #define WIFI_SSID      "---------------------------"
 #define WIFI_PASS      "---------------------------"

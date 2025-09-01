@@ -16,9 +16,11 @@
 #include "driver/gpio.h"
 #include "freertos/event_groups.h"
 #include "my_configs.h"
-
+#include "wifi_handler.h"
 
 #define ESP_MAXIMUM_RETRY  10
+
+device_status_t device_status;
 
 static int attemp_connect = 0;
 static const char *TAG = "WI-FI";
@@ -41,11 +43,13 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
             attemp_connect ++;
         }
         else{
+            device_status.connected = false;
             ESP_LOGW(TAG, "--------------SSID 0R PASS ERROR -------------");
         }
         ESP_LOGI("","attemp_connect >> %d\n",attemp_connect);
     } 
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        device_status.connected = true;
         ESP_LOGW("", "\n============-- WI - FI Connected --==============\n");
         
     }
