@@ -181,7 +181,7 @@ void sssend_telegram_message(void) {
 	
 	//const char *post_data = "{\"chat_id\":1234567890,\"text\":\"Envio de post\"}";
 	char post_data[512] = "";
-	sprintf(post_data,"{\"chat_id\":%s,\"text\":\"test message from esp\"}",chat_ID1);
+	sprintf(post_data,"{\"chat_id\":%s,\"text\":\"test message from esp\"}",ROOT_CHAT_ID);
     esp_http_client_set_method(client, HTTP_METHOD_POST);
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_post_field(client, post_data, strlen(post_data));
@@ -303,7 +303,7 @@ char* telegram_get_last_message_text(void) {
     ESP_LOGI("TELEGRAM", ">>>>: %s", buffer); 
 
 
-cJSON *json = cJSON_Parse(buffer);
+    cJSON *json = cJSON_Parse(buffer);
     if (!json) return NULL;
 
     cJSON *result = cJSON_GetObjectItem(json, "result");
@@ -339,10 +339,10 @@ cJSON *json = cJSON_Parse(buffer);
     cJSON *date = cJSON_GetObjectItem(message, "date");
     if (cJSON_IsNumber(date)){
         time_t t = (time_t)date->valueint;        // timestamp Telegram
-    struct tm ts;
-    localtime_r(&t, &ts);                     // convert to lockal time
-    char time_str[32];
-    strftime(time_str, sizeof(time_str), "%H:%M:%S %d-%m-%Y", &ts);  
+        struct tm ts;
+        localtime_r(&t, &ts);                     // convert to local time
+        char time_str[32];
+        strftime(time_str, sizeof(time_str), "%H:%M:%S %d-%m-%Y", &ts);  
         ESP_LOGI("TELEGRAM", "date: %s", time_str);
     } 
 
@@ -414,7 +414,7 @@ void http_test_task(void *pvParameters) {
 
     init_telegram_bot();
 
-    send_telegram_message(chat_ID1, "Hello from ESP32!");
+    send_telegram_message(ROOT_CHAT_ID, "RESTART BOT");
 
     
     set_command("start", "start bot");
