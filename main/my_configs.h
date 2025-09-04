@@ -4,11 +4,12 @@
 
 
 /* WI-FI configuration*/
-#define WIFI_SSID      "---------------------------"
-#define WIFI_PASS      "---------------------------"
+#define WIFI_SSID      "-----"
+#define WIFI_PASS      "----"
 
 /*Telegram configuration*/
-#define TOKEN "---------------------------"
+#define TOKEN "---"
+#define ALLOWED_MAX_CHAT_IDS 10
+#define chat_ID1 "----"
 
-#define chat_ID1 "---------------------------"
-#define chat_ID2 "---------------------------"
+#define GET_NEW_MSG_TIME 2000 //in ms

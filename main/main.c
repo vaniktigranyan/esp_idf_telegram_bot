@@ -3,20 +3,18 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "esp_system.h"
+//#include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
-#include "esp_netif.h"
 
-#include "esp_wifi.h"
-#include "esp_http_client.h"
 #include "driver/gpio.h"
 
 #include "wifi_handler.h"
 #include "telegram_bot.h"
 #include "my_configs.h"
 
-#define TAG "main"
+#define TAG "appmain"
+
 void app_main(void){
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();

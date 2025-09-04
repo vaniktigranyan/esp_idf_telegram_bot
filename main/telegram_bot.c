@@ -181,7 +181,7 @@ void sssend_telegram_message(void) {
 	
 	//const char *post_data = "{\"chat_id\":1234567890,\"text\":\"Envio de post\"}";
 	char post_data[512] = "";
-	sprintf(post_data,"{\"chat_id\":%s,\"text\":\"test message from esp\"}",chat_ID2);
+	sprintf(post_data,"{\"chat_id\":%s,\"text\":\"test message from esp\"}",chat_ID1);
     esp_http_client_set_method(client, HTTP_METHOD_POST);
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_post_field(client, post_data, strlen(post_data));
@@ -427,7 +427,7 @@ void http_test_task(void *pvParameters) {
         if (msg) {
             ESP_LOGI("FROM_TELEGRAM_CHAT", ">>>>: %s", msg);
         } 
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        vTaskDelay(GET_NEW_MSG_TIME / portTICK_PERIOD_MS);
     }
     
     
