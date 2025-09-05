@@ -32,7 +32,7 @@ void app_main(void){
     
     while (!device_status.connected){
       connect_to_wifi(WIFI_SSID,WIFI_PASS);
-      vTaskDelay(5000 / portTICK_PERIOD_MS);
+      vTaskDelay(7000 / portTICK_PERIOD_MS);
     }
 
     xTaskCreatePinnedToCore(&http_test_task, "http_test_task", 8192*5, NULL, 5, NULL,0);

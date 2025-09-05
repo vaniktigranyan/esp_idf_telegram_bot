@@ -18,7 +18,7 @@
 #include <inttypes.h>
 #include "cJSON.h"
 #include "my_configs.h"
-
+#include "telegram_bot.h"
 
 /*HTTP buffer*/
 #define MAX_HTTP_RECV_BUFFER 1024
@@ -34,6 +34,7 @@ typedef struct {
 static telegram_command_t commands[MAX_COMMANDS];
 static int command_count = 0;
 
+telegram_bot_info_t bot_info;
 
 /* TAGs for the system*/
 static const char *TAG = "HTTP_CLIENT Handler";
@@ -156,50 +157,6 @@ void check_bot_info(void) {
     ESP_LOGW(TAG, "Limpiare");
     esp_http_client_cleanup(client);
 }
-
-void sssend_telegram_message(void) {
-
-
-	char url[512] = "";
-    char output_buffer[MAX_HTTP_OUTPUT_BUFFER] = {0}; 
-    esp_http_client_config_t config = {
-        .url = "https://api.telegram.org",
-        .transport_type = HTTP_TRANSPORT_OVER_SSL,
-        .event_handler = _http_event_handler,
-        .cert_pem = telegram_certificate_pem_start,
-		.user_data = output_buffer,
-    };
-    //POST
-    ESP_LOGW(TAG, "Iniciare");
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    strcat(url,url_string);
-    strcat(url,"/sendMessage");
-    esp_http_client_set_url(client, url);
-
-
-	ESP_LOGW(TAG, "Enviare POST");
-	
-	//const char *post_data = "{\"chat_id\":1234567890,\"text\":\"Envio de post\"}";
-	char post_data[512] = "";
-	sprintf(post_data,"{\"chat_id\":%s,\"text\":\"test message from esp\"}",ROOT_CHAT_ID);
-    esp_http_client_set_method(client, HTTP_METHOD_POST);
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, post_data, strlen(post_data));
-
-    esp_err_t err = esp_http_client_perform(client);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "HTTP POST Status = %d, content_length = %lld",esp_http_client_get_status_code(client),esp_http_client_get_content_length(client));
-        ESP_LOGW(TAG, "Desde Perform el output es: %s",output_buffer);
-
-    } else {
-        ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
-    }
-
-    ESP_LOGW(TAG, "Limpiare");
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
-    //ESP_LOGI(TAG, "esp_get_free_heap_size: %lld", esp_get_free_heap_size());
-}
 void send_telegram_message(const char* chat_id, const char* message_text) {
     char url[512] = "";
     char output_buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};
@@ -241,7 +198,6 @@ void send_telegram_message(const char* chat_id, const char* message_text) {
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
 }
-
 esp_err_t telegram_delete_webhook(const char *bot_token) {
     char url[256];
     snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/deleteWebhook", bot_token);
@@ -324,16 +280,36 @@ char* telegram_get_last_message_text(void) {
     if (cJSON_IsString(text)) {
         strncpy(message_text, text->valuestring, sizeof(message_text) - 1);
         message_text[sizeof(message_text) - 1] = '\0';
+
+        // Если новое сообщение отличается от последнего, обновляем
+        if (strcmp(message_text, bot_info.last_msg) != 0) {
+            strncpy(bot_info.last_msg, message_text, sizeof(bot_info.last_msg) - 1);
+            bot_info.last_msg[sizeof(bot_info.last_msg) - 1] = '\0';
+            strncpy(bot_info.current_msg, message_text, sizeof(bot_info.current_msg) - 1);
+            bot_info.current_msg[sizeof(bot_info.current_msg) - 1] = '\0';
+            ESP_LOGI("TELEGRAM", "New message detected: %s", bot_info.current_msg);
+        } else {
+            ESP_LOGI("TELEGRAM", "No new message");
+            bot_info.current_msg[0] = '\0'; // current_msg пустое, потому что нет нового
+        }
+        
     }
 
     // Дополнительно можно логировать все доступные поля
     cJSON *chat = cJSON_GetObjectItem(message, "chat");
     if (cJSON_IsObject(chat)) {
         cJSON *chat_id = cJSON_GetObjectItem(chat, "id");
-        if (cJSON_IsNumber(chat_id)) ESP_LOGI("TELEGRAM", "chat_id: %lld", (long long)chat_id->valuedouble);
+        if (cJSON_IsNumber(chat_id)){
+            snprintf(bot_info.current_chat_id, sizeof(bot_info.current_chat_id), "%lld", (long long)chat_id->valuedouble);
+            //ESP_LOGI("TELEGRAM", "chat_id: %lld", (long long)chat_id->valuedouble);
+        } 
 
         cJSON *username = cJSON_GetObjectItem(chat, "username");
-        if (cJSON_IsString(username)) ESP_LOGI("TELEGRAM", "username: %s", username->valuestring);
+        if (cJSON_IsString(username)){
+            strncpy(bot_info.sender_username, username->valuestring, sizeof(bot_info.sender_username) - 1);
+            bot_info.sender_username[sizeof(bot_info.sender_username) - 1] = '\0';
+            //ESP_LOGI("TELEGRAM", "username: %s", username->valuestring);
+        } 
     }
 
     cJSON *date = cJSON_GetObjectItem(message, "date");
@@ -424,9 +400,15 @@ void http_test_task(void *pvParameters) {
 
     while (1){
         char *msg = telegram_get_last_message_text();
-        if (msg) {
-            ESP_LOGI("FROM_TELEGRAM_CHAT", ">>>>: %s", msg);
-        } 
+        //if (msg) {
+            //ESP_LOGI("FROM_TELEGRAM_CHAT", ">>>>: %s", msg);
+            ESP_LOGI("current_chat_id", ">>>>: %s", bot_info.current_chat_id);
+            ESP_LOGI("sender_username", ">>>>: %s", bot_info.sender_username);
+            ESP_LOGI("last_msg", ">>>>: %s", bot_info.last_msg);
+            ESP_LOGI("current_message", ">>>>: %s", bot_info.current_msg);
+
+
+        //}
         vTaskDelay(GET_NEW_MSG_TIME / portTICK_PERIOD_MS);
     }
     

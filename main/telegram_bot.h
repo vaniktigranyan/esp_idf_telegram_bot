@@ -4,14 +4,21 @@
 #include "my_configs.h"
 
 typedef struct {
-    char bot_token[128];        // Telegram bot token
-    char api_url[128];          // Base API URL (e.g., "https://api.telegram.org")
+    char current_msg[256];        
+    char current_chat_id[10];
+    char sender_username[32];      
+
+    char last_msg[256];
 } telegram_bot_info_t;
 
 typedef struct {
     char allowed_chat_id[ALLOWED_MAX_CHAT_IDS][10]; // Array to store allowed chat IDs 
     char api_url[128];          
 } nvs_telegram_data_t;
+
+
+extern telegram_bot_info_t bot_info;
+
 
 void http_test_task(void *pvParameters);
 void check_bot_info(void);
