@@ -9,6 +9,7 @@ typedef struct {
     char sender_username[32];      
 
     char last_msg[256];
+    int last_message_id;
 } telegram_bot_info_t;
 
 typedef struct {
@@ -22,7 +23,9 @@ extern telegram_bot_info_t bot_info;
 
 void http_test_task(void *pvParameters);
 void check_bot_info(void);
-void send_telegram_message(const char* chat_id, const char* message_text);
+//void send_telegram_message(const char* chat_id, const char* message_text);
+bool send_telegram_message(const char* chat_id, const char* message_text);
+
 esp_err_t telegram_delete_webhook(const char *bot_token);
 void set_command(const char *cmd, const char *desc);
 void telegram_upload_commands(void);
