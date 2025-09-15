@@ -14,7 +14,19 @@
 #include "my_configs.h"
 
 #define TAG "appmain"
-
+void processing_task(void *pvParameters){
+    while(1){
+        if (bot_info.current_msg[0] != '\0'){
+            //process message
+            if (strcmp(bot_info.current_msg, "/start") == 0){
+                send_telegram_message(bot_info.current_chat_id, "Bot startedddddddddddddddd");
+            } else if (strcmp(bot_info.current_msg, "hello") == 0){
+                send_telegram_message(bot_info.current_chat_id, "bare ape jan");
+            } 
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+}
 void app_main(void){
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -35,6 +47,7 @@ void app_main(void){
       vTaskDelay(7000 / portTICK_PERIOD_MS);
     }
 
-    xTaskCreatePinnedToCore(&http_test_task, "http_test_task", 8192*5, NULL, 5, NULL,0);
+    xTaskCreatePinnedToCore(&http_test_task, "http_test_task", 1024*10, NULL, 5, NULL,0);
+    xTaskCreate(&processing_task, "processing_task", 1024*10, NULL, 10, NULL);
 
 }

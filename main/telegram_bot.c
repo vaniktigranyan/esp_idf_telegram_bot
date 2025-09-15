@@ -143,24 +143,26 @@ static void escape_json_string(const char* src, char* dst, size_t dst_size) {
     dst[j] = '\0';
 }
 bool send_telegram_message_with_buttons(const char* chat_id, const char* message_text, const char* buttons[], int num_buttons, int layout_type) {
-    
     if (num_buttons > MAX_BUTTONS) num_buttons = MAX_BUTTONS;
 
-    char url[512] = "";
+    char url[1024];  // увеличенный буфер для URL
     char output_buffer[2048] = {0};
 
+    int n = snprintf(url, sizeof(url), "%s/sendMessage", url_string);
+    if (n < 0 || n >= sizeof(url)) {
+        ESP_LOGE(TAG, "URL слишком длинный!");
+        return false;
+    }
+
     esp_http_client_config_t config = {
-        .url = "https://api.telegram.org",
+        .url = url,
         .transport_type = HTTP_TRANSPORT_OVER_SSL,
-        .event_handler = _http_event_handler, // ваша функция обработки HTTP событий
+        .event_handler = _http_event_handler,
         .cert_pem = telegram_certificate_pem_start,
         .user_data = output_buffer,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
-    strcat(url, url_string);  // "https://api.telegram.org/bot<token>"
-    strcat(url, "/sendMessage");
-    esp_http_client_set_url(client, url);
 
     // Экранируем текст сообщения
     char safe_text[1024];
@@ -190,7 +192,7 @@ bool send_telegram_message_with_buttons(const char* chat_id, const char* message
         }
         cJSON_AddItemToArray(inline_keyboard, row);
     } else if (layout_type == 1) {
-        // Вертикально (каждая кнопка в своём ряду)
+        // Вертикально
         for (int i = 0; i < num_buttons; i++) {
             cJSON *row = cJSON_CreateArray();
             cJSON *button = cJSON_CreateObject();
@@ -211,16 +213,20 @@ bool send_telegram_message_with_buttons(const char* chat_id, const char* message
     }
 
     cJSON_AddItemToObject(keyboard, "inline_keyboard", inline_keyboard);
-
     char *keyboard_str = cJSON_PrintUnformatted(keyboard);
     cJSON_Delete(keyboard);
 
     char post_data[2048];
-    snprintf(post_data, sizeof(post_data),
-             "{\"chat_id\":\"%s\",\"text\":\"%s\",\"reply_markup\":%s}",
-             chat_id, safe_text, keyboard_str);
-
+    int m = snprintf(post_data, sizeof(post_data),
+                     "{\"chat_id\":\"%s\",\"text\":\"%s\",\"reply_markup\":%s}",
+                     chat_id, safe_text, keyboard_str);
     free(keyboard_str);
+
+    if (m < 0 || m >= sizeof(post_data)) {
+        ESP_LOGE(TAG, "POST data слишком длинный!");
+        esp_http_client_cleanup(client);
+        return false;
+    }
 
     esp_http_client_set_method(client, HTTP_METHOD_POST);
     esp_http_client_set_header(client, "Content-Type", "application/json");
@@ -278,10 +284,10 @@ void telegram_check_callback(void) {
     esp_err_t err = esp_http_client_perform(client);
 
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "HTTPS Status = %d, content_length = %lld",
+        //ESP_LOGI(TAG, "HTTPS Status = %d, content_length = %lld",
                  esp_http_client_get_status_code(client),
-                 esp_http_client_get_content_length(client));
-        ESP_LOGW(TAG, "Response: %s", buffer);
+                 esp_http_client_get_content_length(client);
+        //ESP_LOGW(TAG, "Response: %s", buffer);
 
         // парсим JSON
         cJSON *root = cJSON_Parse(buffer);
@@ -308,7 +314,7 @@ void telegram_check_callback(void) {
 
                         esp_err_t err2 = esp_http_client_perform(client);
                         if (err2 == ESP_OK) {
-                            ESP_LOGI(TAG, "Answered callback query OK");
+                            //ESP_LOGI(TAG, "Answered callback query OK");
                         } else {
                             ESP_LOGE(TAG, "Failed to answer callback query: %s", esp_err_to_name(err2));
                         }
@@ -361,7 +367,6 @@ bool delete_message(const char *chat_id, int message_id) {
 
     return success;
 }
-
 void check_bot_info(void) {
 	char buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};   // Buffer to store response of http request
 	char url[512] = "";
@@ -460,99 +465,6 @@ bool send_telegram_message(const char* chat_id, const char* message_text) {
 
     return success;
 }
-bool telegram_delete_last_message(void) {
-    if (bot_info.last_message_id == 0 || strlen(bot_info.current_chat_id) == 0) {
-        ESP_LOGW(TAG, "Нет ID последнего сообщения или chat_id");
-        return false;
-    }
-
-    char url[1024];  // увеличили буфер
-    int n = snprintf(url, sizeof(url), "%s/deleteMessage", url_string);
-    if (n >= sizeof(url)) {
-        ESP_LOGE(TAG, "URL слишком длинный!");
-        return false;
-    }
-
-    char post_data[256];
-    snprintf(post_data, sizeof(post_data),
-             "{\"chat_id\":\"%s\",\"message_id\":%d}",
-             bot_info.current_chat_id, bot_info.last_message_id);
-
-    char output_buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};
-
-    esp_http_client_config_t config = {
-        .url = url,
-        .transport_type = HTTP_TRANSPORT_OVER_SSL,
-        .event_handler = _http_event_handler,
-        .cert_pem = telegram_certificate_pem_start,
-        .user_data = output_buffer,
-    };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-
-    esp_http_client_set_method(client, HTTP_METHOD_POST);
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, post_data, strlen(post_data));
-
-    esp_err_t err = esp_http_client_perform(client);
-    bool success = false;
-
-    if (err == ESP_OK) {
-        int status = esp_http_client_get_status_code(client);
-        ESP_LOGI(TAG, "HTTP Status: %d", status);
-
-        if (status == 200) {
-            cJSON *json = cJSON_Parse(output_buffer);
-            if (json) {
-                cJSON *ok = cJSON_GetObjectItem(json, "ok");
-                if (cJSON_IsBool(ok) && cJSON_IsTrue(ok)) {
-                    success = true;
-                    ESP_LOGI(TAG, "Последнее сообщение удалено");
-                    bot_info.last_message_id = 0; // сброс ID
-                }
-                cJSON_Delete(json);
-            }
-        } else {
-            ESP_LOGW(TAG, "Telegram API вернул статус %d", status);
-            ESP_LOGW(TAG, "Response: %s", output_buffer);
-        }
-    } else {
-        ESP_LOGE(TAG, "HTTP POST failed: %s", esp_err_to_name(err));
-    }
-
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
-
-    return success;
-}
-
-// Удалить последние N сообщений
-bool telegram_delete_last_n_messages(int n) {
-    if (n <= 0) return false;
-
-    for (int i = 0; i < n; i++) {
-        if (!telegram_delete_last_message()) {
-            ESP_LOGW(TAG, "Failed to delete message number %d", i + 1);
-            return false;
-        }
-    }
-    return true;
-}
-
-// Удалить все сообщения из чата
-// Важно: Telegram API не предоставляет массовое удаление, нужно хранить ID сообщений
-bool telegram_delete_all_messages(int message_ids[], int count) {
-    if (count <= 0) return false;
-
-    for (int i = 0; i < count; i++) {
-        bot_info.last_message_id = message_ids[i];
-        if (!telegram_delete_last_message()) {
-            ESP_LOGW(TAG, "Failed to delete message id %d", message_ids[i]);
-        }
-    }
-    return true;
-}
-
 esp_err_t telegram_delete_webhook(const char *bot_token) {
     char url[256];
     snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/deleteWebhook", bot_token);
@@ -611,7 +523,7 @@ char* telegram_get_last_message_text(void) {
 
     esp_http_client_cleanup(client);
 
-    ESP_LOGI("TELEGRAM", ">>>>: %s", buffer); 
+    //ESP_LOGI("TELEGRAM", ">>>>: %s", buffer); 
 
 
     cJSON *json = cJSON_Parse(buffer);
@@ -739,7 +651,92 @@ void init_telegram_bot(void){
     check_bot_info();
     telegram_delete_webhook(TOKEN);
 }
+bool telegram_delete_message(const char* chat_id, int message_id) {
+    if (chat_id == NULL || strlen(chat_id) == 0 || message_id <= 0) {
+        ESP_LOGW(TAG, "Неверный chat_id или message_id");
+        return false;
+    }
 
+    char url[1024];
+    snprintf(url, sizeof(url), "%s/deleteMessage", url_string);
+
+    char post_data[256];
+    snprintf(post_data, sizeof(post_data),
+             "{\"chat_id\":%s,\"message_id\":%d}",
+             chat_id, message_id);
+
+    char output_buffer[2048] = {0};
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .event_handler = NULL,
+        .cert_pem = telegram_certificate_pem_start,
+        .user_data = output_buffer,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+
+    esp_http_client_set_method(client, HTTP_METHOD_POST);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, post_data, strlen(post_data));
+
+    esp_err_t err = esp_http_client_perform(client);
+    bool success = false;
+
+    if (err == ESP_OK) {
+        int status = esp_http_client_get_status_code(client);
+        if (status == 200) {
+            cJSON *json = cJSON_Parse(output_buffer);
+            if (json) {
+                cJSON *ok = cJSON_GetObjectItem(json, "ok");
+                if (cJSON_IsBool(ok) && cJSON_IsTrue(ok)) {
+                    success = true;
+                    ESP_LOGI(TAG, "Сообщение %d удалено в чате %s", message_id, chat_id);
+                }
+                cJSON_Delete(json);
+            }
+        } else {
+            ESP_LOGW(TAG, "Telegram API вернул статус %d", status);
+            ESP_LOGW(TAG, "Response: %s", output_buffer);
+        }
+    } else {
+        ESP_LOGE(TAG, "HTTP POST failed: %s", esp_err_to_name(err));
+    }
+
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+
+    return success;
+}
+
+// Удаление последних N сообщений по chat_id, используя last_message_id
+bool telegram_delete_last_n_messages(const char* chat_id, int last_message_id, int n) {
+    if (chat_id == NULL || last_message_id <= 0 || n <= 0) return false;
+
+    bool all_success = true;
+    for (int i = 0; i < n; i++) {
+        if (!telegram_delete_message(chat_id, last_message_id - i)) {
+            ESP_LOGW(TAG, "Не удалось удалить сообщение ID %d", last_message_id - i);
+            all_success = false;
+        }
+    }
+    return all_success;
+}
+// Удалить все сообщения от последнего до первого
+void telegram_delete_all_messages(const char* chat_id, int last_message_id) {
+    if (chat_id == NULL || last_message_id <= 0) {
+        ESP_LOGW(TAG, "Неверный chat_id или last_message_id");
+        return;
+    }
+
+    for (int id = last_message_id; id > 0; id--) {
+        bool deleted = telegram_delete_message(chat_id, id);
+        if (!deleted) {
+            ESP_LOGW(TAG, "Не удалось удалить сообщение с id %d", id);
+        }
+    }
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void http_test_task(void *pvParameters) {
 
@@ -748,22 +745,18 @@ void http_test_task(void *pvParameters) {
     send_telegram_message(ROOT_CHAT_ID, "RESTART BOT");
 
 
-    const char* buttons[] = {"butt1", "butt2", "butt3", "butt4", "butt5", "butt6"};
-    bool sent = send_telegram_message_with_buttons(ROOT_CHAT_ID,
-                                                    "Вы согласны?",
-                                                    buttons, 6,
-                                                    0); // 0 - горизонтально
-    const char* buttons2[] = {"butt1", "butt2", "butt3", "butt4", "butt5", "butt6"};
-    sent = send_telegram_message_with_buttons(ROOT_CHAT_ID,
-                                                    "Вы согласны?",
-                                                    buttons2, 6,
-                                                    1); // 1 - вертикально
-if (sent) {
-    ESP_LOGI(TAG, "Сообщение успешно отправлено!");
-} else {
-    ESP_LOGW(TAG, "Ошибка отправки сообщения!");
-}
+    const char* buttons[] = {"ha", "che", "yola", "normal"};
+    
+    bool sent = send_telegram_message_with_buttons(ROOT_CHAT_ID, "barev ape jan\nlaves aper jan?\nlav eli aper jan✌️", buttons, 4, 0);
 
+    const char* buttons2[] = {"butt1", "butt2", "butt3", "butt4", "butt5", "butt6"};
+    sent = send_telegram_message_with_buttons(ROOT_CHAT_ID, "bareb barev karmir arev☀️\nkanach terev barev🎄\ninch ka exo jan?", buttons2, 6, 1); // 1 - вертикально
+    
+    if (sent) {
+        ESP_LOGI(TAG, "Сообщение успешно отправлено!");
+    } else {
+        ESP_LOGW(TAG, "Ошибка отправки сообщения!");
+    }
 
     //add commands
     set_command("start", "▶️ start bot");
@@ -771,7 +764,6 @@ if (sent) {
     set_command("get", "  🔃 get info");
     telegram_upload_commands();
 
-    telegram_delete_last_message();
     while (1){
         telegram_get_last_message_text();
         telegram_check_callback();
@@ -780,7 +772,8 @@ if (sent) {
         ESP_LOGI("last_msg", ">>>>: %s", bot_info.last_msg);
         ESP_LOGI("current_message", ">>>>: %s", bot_info.current_msg);
         ESP_LOGI("last_message_id", ">>>>: %d", bot_info.last_message_id);
-        telegram_delete_last_message();
+        ESP_LOGI("","***********************************************************************");
+        //telegram_delete_message(ROOT_CHAT_ID, --a);
         vTaskDelay(GET_NEW_MSG_TIME / portTICK_PERIOD_MS);
     }
     
